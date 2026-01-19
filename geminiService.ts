@@ -1,0 +1,68 @@
+
+import { GoogleGenAI } from "@google/genai";
+
+const SYSTEM_INSTRUCTION = `
+You are a Cricket Match Summary Assistant for WICC.
+Your job is to generate a simplified, high-impact Series Report.
+
+STRICT OUTPUT STRUCTURE:
+1️⃣ SERIES CHAMPIONS: [Winning Team Name] ([Total Series Points] pts)
+   - Mention that they were the first to reach the target of 10 points.
+2️⃣ FINAL STANDINGS: 
+   - [Team A Name]: [Total Points]
+   - [Team B Name]: [Total Points]
+3️⃣ ELITE ACCOLADES:
+   - 🧢 MAN OF THE SERIES: [Name] [ORANGE CAP]
+   - ⭐ MVP: [Name]
+   - 🏏 MOST WICKETS: [Name]
+   - 🏃 MOST RUNS: [Name]
+   - 🧤 MOST CATCHES: [Name]
+4️⃣ TOURNAMENT STATUS: [Brief summary of how the victory was clinched]
+
+TONE: Celebratory, Professional, Tournament-level.
+CLOSING LINE: "WICC Match Summary Recorded Successfully 🏏✨"
+`;
+
+export const generateSummary = async (data: any): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  // Logic to determine winner string based on 10 point rule
+  const totalA = data.seriesStats.totalA;
+  const totalB = data.seriesStats.totalB;
+  
+  let winner = "SERIES IN PROGRESS";
+  if (totalA >= 10) winner = data.teamOneName;
+  else if (totalB >= 10) winner = data.teamTwoName;
+  else winner = totalA > totalB ? data.teamOneName : data.teamTwoName;
+
+  const prompt = `
+    SERIES DATA FOR REPORT:
+    Team A: ${data.teamOneName} | Points: ${totalA}
+    Team B: ${data.teamTwoName} | Points: ${totalB}
+    Declared Winner: ${winner}
+    Target Score: 10 Points
+
+    END OF SERIES AWARDS:
+    - Man of Series: ${data.mos}
+    - MVP: ${data.mvp}
+    - Most Runs: ${data.topRuns}
+    - Most Wickets: ${data.topWickets}
+    - Most Catches: ${data.topCatches}
+    
+    Match Accolades Note: MOM and MOI were recorded for each match.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+      },
+    });
+    return response.text || "Failed to generate series summary.";
+  } catch (error) {
+    console.error("Gemini API Error:", error);
+    return "Error generating series summary.";
+  }
+};
