@@ -12,22 +12,16 @@ const WICC_MEMBERS = [
   "PRASATH", "DIL"
 ].sort();
 
-/**
- * Formats a date string for display.
- * Requested format: 19-01-26 (YY-MM-DD)
- */
 const formatDateForDisplay = (dateStr: string) => {
   if (!dateStr) return '';
   const parts = dateStr.split('-');
   if (parts.length !== 3) return dateStr;
   const [year, month, day] = parts;
-  // Format: YY-MM-DD
   return `${year.slice(-2)}-${month}-${day}`;
 };
 
 const App: React.FC = () => {
   const [records, setRecords] = useState<MatchData[]>([]);
-  const [players, setPlayers] = useState<string[]>([]);
   const [history, setHistory] = useState<MatchData[][]>([]);
   const reportRef = useRef<HTMLDivElement>(null);
   
@@ -144,10 +138,6 @@ const App: React.FC = () => {
 
   const archiveSeries = () => {
     if (!confirm('Archive and Reset current series?')) return;
-    const blob = new Blob([JSON.stringify({ records, players, awards: formData }, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `WICC_Archive_${formData.date}.json`; a.click();
     setRecords([]); setHistory([]);
   };
 

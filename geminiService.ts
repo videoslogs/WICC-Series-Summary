@@ -24,9 +24,15 @@ CLOSING LINE: "WICC Match Summary Recorded Successfully 🏏✨"
 `;
 
 export const generateSummary = async (data: any): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
   
-  // Logic to determine winner string based on 10 point rule
+  if (!apiKey) {
+    console.error("API_KEY is missing from environment variables.");
+    return "Error: API_KEY is not configured in Vercel. Please add it to Environment Variables.";
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  
   const totalA = data.seriesStats.totalA;
   const totalB = data.seriesStats.totalB;
   
@@ -61,8 +67,8 @@ export const generateSummary = async (data: any): Promise<string> => {
       },
     });
     return response.text || "Failed to generate series summary.";
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
-    return "Error generating series summary.";
+    return `API Error: ${error?.message || "Check Vercel logs and API Key status."}`;
   }
 };
