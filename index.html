@@ -7,16 +7,107 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { background-color: #020617; color: #ffffff; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        body {
+            background-color: #020617;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
         .font-orbitron { font-family: 'Orbitron', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        /* ... keeping your custom styles ... */
-        .glow-border { border: 2px solid #1581BF; box-shadow: 0 0 30px rgba(21, 129, 191, 0.6); }
+        
+        .glow-border {
+            border: 2px solid #1581BF;
+            box-shadow: 0 0 30px rgba(21, 129, 191, 0.6), inset 0 0 20px rgba(21, 129, 191, 0.2);
+        }
+
+        .glow-box-blue {
+            background: rgba(21, 129, 191, 0.25);
+            border: 2px solid #00a2ff;
+            box-shadow: 0 0 25px rgba(0, 162, 255, 0.6);
+        }
+
+        .glow-box-orange {
+            background: rgba(249, 115, 22, 0.25);
+            border: 2px solid #ff7300;
+            box-shadow: 0 0 25px rgba(255, 115, 0, 0.6);
+        }
+
+        .team-blue-bg {
+            background: rgba(0, 162, 255, 0.4) !important;
+            text-shadow: 0 0 10px #00a2ff;
+        }
+        .team-orange-bg {
+            background: rgba(255, 115, 0, 0.4) !important;
+            text-shadow: 0 0 10px #ff7300;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .glow-box-target {
+            background: linear-gradient(-45deg, #1e1b4b, #1581BF, #7c2d12, #f97316);
+            background-size: 400% 400%;
+            animation: gradientShift 8s ease infinite;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 40px rgba(21, 129, 191, 0.4), 0 0 60px rgba(249, 115, 22, 0.2);
+        }
+        
+        .glow-input {
+            transition: all 0.2s ease;
+            background: #080c14;
+            border: 2px solid #1581BF;
+            color: #ffffff;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+        .glow-input:focus {
+            outline: none;
+            border-color: #f97316;
+            box-shadow: 0 0 25px rgba(249, 115, 22, 0.8);
+        }
+
+        input[type="date"] {
+            color-scheme: dark;
+            font-size: 11px !important;
+            letter-spacing: 0.5px;
+            padding-right: 2px !important;
+        }
+        
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+            margin-left: -5px;
+            transform: scale(0.8);
+        }
+
+        .date-input-wrapper {
+            position: relative;
+            display: inline-flex;
+            width: 100%;
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #020617; }
+        ::-webkit-scrollbar-thumb { background: #1581BF; border-radius: 4px; }
+
+        @media (max-width: 640px) {
+            .logo-glow h1 { font-size: 3.5rem !important; }
+            .glow-box-target span { font-size: 1.25rem !important; }
+        }
     </style>
 </head>
 <body>
+    <!-- 1. The root div where the app lives -->
     <div id="root"></div>
-    <!-- This line tells Vercel to start your app from index.tsx -->
+
+    <!-- 2. The script tag that starts the React app -->
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>
