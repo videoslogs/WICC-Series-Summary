@@ -124,43 +124,41 @@ const App: React.FC = () => {
   const handleUndo = () => { if (history.length) { setRecords(history[history.length - 1]); setHistory(prev => prev.slice(0, -1)); } };
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setFormData(prev => ({ ...prev, [e.target.name]: e.target.value })); };
   
-  const addRecord = () => {
-    // 1. Save to local state (keeping your current vibe)
+  // FIX: Added 'async' keyword and Supabase sync logic
+  const addRecord = async () => {
+    // 1. Capture current data before reset
+    const currentMatch = { ...formData };
+
+    // 2. Save to local state for instant feedback
     setHistory(prev => [...prev.slice(-9), [...records]]);
     if (editIndex !== null) {
-      const updated = [...records]; 
-      updated[editIndex] = formData; 
-      setRecords(updated); 
-      setEditIndex(null);
-    } else { 
-      setRecords([...records, formData]); 
-    }
+      const updated = [...records]; updated[editIndex] = currentMatch; setRecords(updated); setEditIndex(null);
+    } else { setRecords([...records, currentMatch]); }
 
-    // 2. SAVE TO SUPABASE (The new part)
+    // 3. CLOUD SYNC: Send to Supabase
     try {
+      console.log("Vibe Check: Sending to Supabase...");
       const { error } = await supabase
         .from('wicc_matches')
         .insert([
           {
-            date: formData.date,
-            matchnumber: formData.matchNumber,
-            innings: formData.innings,
-            teamonename: formData.teamOneName,
-            teamtwoname: formData.teamTwoName,
-            // Add other columns here if you have them in Supabase, e.g.:
-            // teamonescore: formData.teamOneScore,
-            // teamtwoscore: formData.teamTwoScore
+            date: currentMatch.date,
+            matchnumber: currentMatch.matchNumber,
+            innings: currentMatch.innings,
+            teamonename: currentMatch.teamOneName,
+            teamtwoname: currentMatch.teamTwoName
           }
         ]);
 
       if (error) throw error;
-      console.log("Successfully synced with Supabase!");
-    } catch (err) {
-      console.error("Supabase Error:", err);
-      alert("Note: Match saved locally but failed to sync to Cloud database.");
+      console.log("Vibe Check: Supabase Sync Success!");
+      alert("Match recorded and synced to Cloud!");
+    } catch (err: any) {
+      console.error("Cloud Sync Error:", err);
+      alert("Local save success, but Cloud sync failed: " + (err.message || "Network Error"));
     }
 
-    // 3. Reset the form (existing logic)
+    // 4. Reset the form
     setFormData(prev => ({ 
       ...prev, teamOneScore: '', teamTwoScore: '', teamOneInn1: '', teamOneInn2: '',
       teamTwoInn1: '', teamTwoInn2: '', moi1: '', moi2: '', mom: '', overs: '', winMargin: '',
@@ -168,8 +166,29 @@ const App: React.FC = () => {
     }));
   };
 
-  const archiveSeries = () => {
-    if (!confirm('Archive and Reset current series?')) return;
+  // FIX: Added Supabase sync for the series table when archiving
+  const archiveSeries = async () => {
+    if (!confirm('Archive and Reset current series? This will also sync awards to the Cloud.')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('wicc_series')
+        .insert([{
+          mos: formData.mos,
+          mvp: formData.mvp,
+          topwickets: formData.topWickets,
+          topruns: formData.topRuns,
+          topcatches: formData.topCatches,
+          winner: seriesStats.leader
+        }]);
+      
+      if (error) throw error;
+      alert("Series awards archived to Cloud!");
+    } catch (err: any) {
+      console.error("Archive Error:", err);
+      alert("Could not sync series awards to Cloud, but resetting local screen now.");
+    }
+
     setRecords([]); setHistory([]);
     setFormData(prev => ({ ...prev, mos: '', mvp: '', topWickets: '', topRuns: '', topCatches: '', matchNumber: '1' }));
   };
@@ -362,212 +381,4 @@ const App: React.FC = () => {
               <input name="winMargin" value={formData.winMargin} onChange={handleInputChange} className="w-full h-10 md:h-12 text-center text-[9px] md:text-[10px] font-black bg-black/80 border-2 border-yellow-500/30 rounded-xl text-yellow-300" />
             </div>
             <div className="col-span-2 md:col-span-2">
-              <button onClick={addRecord} className="w-full h-10 md:h-12 bg-white text-black font-black rounded-xl shadow-lg hover:scale-95 transition-all uppercase text-[10px] md:text-[12px] tracking-wider">
-                {editIndex !== null ? 'UPDATE' : 'COMMIT'}
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-12 gap-3 md:gap-4">
-            <div className="col-span-1 md:col-span-2">
-              <p className="text-[7px] text-yellow-400 font-black uppercase mb-1 ml-1">MOM Caption</p>
-              <input 
-                list="members-all"
-                name="mom" 
-                placeholder="MOM" 
-                value={formData.mom} 
-                onChange={handleInputChange} 
-                className="w-full h-10 md:h-12 px-3 text-[9px] md:text-[11px] font-black bg-black/80 border-2 border-yellow-500 text-yellow-300 rounded-xl placeholder:text-yellow-700 outline-none" 
-              />
-            </div>
-            <div className="col-span-1 md:col-span-2">
-              <p className="text-[7px] text-white/60 font-black uppercase mb-1 ml-1">MOI Entry 1</p>
-              <input 
-                list="members-all"
-                name="moi1" 
-                placeholder="MOI 1" 
-                value={formData.moi1} 
-                onChange={handleInputChange} 
-                className="w-full h-10 md:h-12 px-3 text-[9px] md:text-[11px] font-black bg-black/80 border-2 border-white/20 text-white rounded-xl placeholder:text-white/30 outline-none" 
-              />
-            </div>
-            <div className="col-span-1 md:col-span-2">
-              <p className="text-[7px] text-white/60 font-black uppercase mb-1 ml-1">MOI Entry 2</p>
-              <input 
-                list="members-all"
-                name="moi2" 
-                placeholder="MOI 2" 
-                value={formData.moi2} 
-                onChange={handleInputChange} 
-                className="w-full h-10 md:h-12 px-3 text-[9px] md:text-[11px] font-black bg-black/80 border-2 border-white/20 text-white rounded-xl placeholder:text-white/30 outline-none" 
-              />
-            </div>
-            <div className="col-span-1 md:col-span-3">
-              <label className="block text-[8px] text-[#00e1ff] mb-1 uppercase font-black text-center">{formData.teamOneName} PTS</label>
-              <input name="teamOnePoints" value={formData.teamOnePoints} onChange={handleInputChange} className="w-full h-8 md:h-10 text-center text-[12px] md:text-[14px] font-black bg-black/80 border border-[#00a2ff] text-[#00e1ff] rounded-lg" />
-            </div>
-            <div className="col-span-1 md:col-span-3">
-              <label className="block text-[8px] text-[#ffaa00] mb-1 uppercase font-black text-center">{formData.teamTwoName} PTS</label>
-              <input name="teamTwoPoints" value={formData.teamTwoPoints} onChange={handleInputChange} className="w-full h-8 md:h-10 text-center text-[12px] md:text-[14px] font-black bg-black/80 border border-[#ff7300] text-[#ffaa00] rounded-lg" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Member Assignment Widgets */}
-      <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 md:mb-8">
-        <div className="bg-slate-900/60 border-2 border-[#00a2ff] rounded-xl p-3 md:p-4 shadow-[0_0_15px_rgba(0,162,255,0.2)]">
-          <label className="text-[9px] md:text-[10px] font-orbitron font-bold text-[#00e1ff] tracking-widest uppercase mb-2 block">Assign Member: {formData.teamOneName}</label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input 
-                list="members-all"
-                placeholder="Type name..."
-                value={quickPlayerA}
-                onChange={(e) => setQuickPlayerA(e.target.value.toUpperCase())}
-                className="w-full h-8 md:h-9 bg-black/80 border border-[#00a2ff] rounded-lg px-2 text-white font-mono text-[10px] outline-none"
-              />
-            </div>
-            <button 
-              onClick={() => { if(quickPlayerA) { setTeamAPlayers(p => [...new Set([...p, quickPlayerA])]); setQuickPlayerA(''); } }}
-              className="px-3 h-8 md:h-9 bg-[#00a2ff] text-white font-black text-[9px] rounded-lg"
-            >ADD</button>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1 max-h-[50px] overflow-y-auto p-1 bg-black/20 rounded-lg">
-            {teamAPlayers.map((p, i) => (
-              <span key={i} className="px-2 py-0.5 bg-[#00a2ff]/20 border border-[#00a2ff] text-[#00e1ff] rounded-full text-[8px] font-bold flex items-center gap-1">
-                {p} <button onClick={() => setTeamAPlayers(prev => prev.filter((_, idx) => idx !== i))}>&times;</button>
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-slate-900/60 border-2 border-[#ff7300] rounded-xl p-3 md:p-4 shadow-[0_0_15px_rgba(255,115,0,0.2)]">
-          <label className="text-[9px] md:text-[10px] font-orbitron font-bold text-[#ffaa00] tracking-widest uppercase mb-2 block">Assign Member: {formData.teamTwoName}</label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input 
-                list="members-all"
-                placeholder="Type name..."
-                value={quickPlayerB}
-                onChange={(e) => setQuickPlayerB(e.target.value.toUpperCase())}
-                className="w-full h-8 md:h-9 bg-black/80 border border-[#ff7300] rounded-lg px-2 text-white font-mono text-[10px] outline-none"
-              />
-            </div>
-            <button 
-              onClick={() => { if(quickPlayerB) { setTeamBPlayers(p => [...new Set([...p, quickPlayerB])]); setQuickPlayerB(''); } }}
-              className="px-3 h-8 md:h-9 bg-orange-600 text-white font-black text-[9px] rounded-lg"
-            >ADD</button>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1 max-h-[50px] overflow-y-auto p-1 bg-black/20 rounded-lg">
-            {teamBPlayers.map((p, i) => (
-              <span key={i} className="px-2 py-0.5 bg-orange-600/20 border border-[#ff7300] text-[#ffaa00] rounded-full text-[8px] font-bold flex items-center gap-1">
-                {p} <button onClick={() => setTeamBPlayers(prev => prev.filter((_, idx) => idx !== i))}>&times;</button>
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Series End Awards Hub */}
-      <div className="w-full max-w-7xl bg-slate-900 border-2 border-orange-500/40 rounded-3xl md:rounded-[40px] p-4 md:p-8 mb-6">
-        <h3 className="font-orbitron text-orange-400 text-sm md:text-lg tracking-[0.2em] md:tracking-[0.4em] font-black mb-4 md:mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-1">
-          <span>SERIES AWARDS HUB</span>
-          <span className="text-[8px] md:text-[11px] text-white/40 uppercase italic font-bold">LIVE RECORDING MODE</span>
-        </h3>
-        
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-6">
-          <div className="bg-black/40 p-3 md:p-5 rounded-xl border border-white/5 flex flex-col">
-            <p className="text-[8px] md:text-[10px] text-orange-500 uppercase font-black mb-2">MOS 🧢</p>
-            <input list="members-all" name="mos" value={formData.mos} onChange={handleInputChange} placeholder="Name" className="bg-transparent text-white font-black text-xs md:text-sm outline-none border-b border-white/10 focus:border-orange-500 uppercase py-1" />
-          </div>
-          <div className="bg-black/40 p-3 md:p-5 rounded-xl border border-white/5 flex flex-col">
-            <p className="text-[8px] md:text-[10px] text-[#00e1ff] uppercase font-black mb-2">MVP ⭐</p>
-            <input list="members-all" name="mvp" value={formData.mvp} onChange={handleInputChange} placeholder="Name" className="bg-transparent text-white font-black text-xs md:text-sm outline-none border-b border-white/10 focus:border-[#00a2ff] uppercase py-1" />
-          </div>
-          <div className="bg-black/40 p-3 md:p-5 rounded-xl border border-white/5 flex flex-col">
-            <p className="text-[8px] md:text-[10px] text-red-500 uppercase font-black mb-2">MOST WICKETS</p>
-            <input list="members-all" name="topWickets" value={formData.topWickets} onChange={handleInputChange} placeholder="Name" className="bg-transparent text-white font-black text-xs md:text-sm outline-none border-b border-white/10 focus:border-red-500 uppercase py-1" />
-          </div>
-          <div className="bg-black/40 p-3 md:p-5 rounded-xl border border-white/5 flex flex-col">
-            <p className="text-[8px] md:text-[10px] text-green-500 uppercase font-black mb-2">MOST RUNS</p>
-            <input list="members-all" name="topRuns" value={formData.topRuns} onChange={handleInputChange} placeholder="Name" className="bg-transparent text-white font-black text-xs md:text-sm outline-none border-b border-white/10 focus:border-green-500 uppercase py-1" />
-          </div>
-          <div className="bg-black/40 p-3 md:p-5 rounded-xl border border-white/5 flex flex-col">
-            <p className="text-[8px] md:text-[10px] text-yellow-400 uppercase font-black mb-2">MOST CATCHES</p>
-            <input list="members-all" name="topCatches" value={formData.topCatches} onChange={handleInputChange} placeholder="Name" className="bg-transparent text-white font-black text-xs md:text-sm outline-none border-b border-white/10 focus:border-yellow-500 uppercase py-1" />
-          </div>
-        </div>
-      </div>
-
-      {/* Instant Recap Gadget (Local, no API) */}
-      {(formData.mos || formData.mvp || seriesStats.totalA > 0 || seriesStats.totalB > 0) && (
-        <div className="w-full max-w-7xl mb-8 animate-in slide-in-from-top-4 duration-300">
-           <div className="bg-slate-900 border-t-4 border-[#1581BF] rounded-2xl p-6 shadow-2xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
-                 <button onClick={archiveSeries} className="text-red-500 font-orbitron text-[10px] font-black border border-red-500 px-3 py-1 rounded-full">ARCHIVE SERIES</button>
-              </div>
-              <div className="flex flex-col md:flex-row gap-6 items-center">
-                 <div className="flex-1 text-center md:text-left">
-                    <h4 className="font-orbitron text-white text-xs tracking-widest uppercase mb-1 font-bold">🏆 SERIES RECAP</h4>
-                    <p className="text-[#57c1ff] font-black text-xl md:text-2xl uppercase">{seriesStats.leader}</p>
-                    <div className="flex gap-4 mt-2 justify-center md:justify-start font-mono text-xs">
-                       <span className="text-[#00e1ff]">{formData.teamOneName}: {seriesStats.totalA} Pts</span>
-                       <span className="text-white/20">|</span>
-                       <span className="text-[#ffaa00]">{formData.teamTwoName}: {seriesStats.totalB} Pts</span>
-                    </div>
-                 </div>
-                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-8 flex-[2] w-full border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-8">
-                    {formData.mos && <div className="text-center md:text-left"><p className="text-[8px] text-orange-400 uppercase font-black">MOS</p><p className="text-white font-bold text-sm truncate uppercase">{formData.mos}</p></div>}
-                    {formData.mvp && <div className="text-center md:text-left"><p className="text-[8px] text-[#00e1ff] uppercase font-black">MVP</p><p className="text-white font-bold text-sm truncate uppercase">{formData.mvp}</p></div>}
-                    {formData.topRuns && <div className="text-center md:text-left"><p className="text-[8px] text-green-400 uppercase font-black">RUNS</p><p className="text-white font-bold text-sm truncate uppercase">{formData.topRuns}</p></div>}
-                    {formData.topWickets && <div className="text-center md:text-left"><p className="text-[8px] text-red-400 uppercase font-black">WKTS</p><p className="text-white font-bold text-sm truncate uppercase">{formData.topWickets}</p></div>}
-                    {formData.topCatches && <div className="text-center md:text-left"><p className="text-[8px] text-yellow-400 uppercase font-black">CTHS</p><p className="text-white font-bold text-sm truncate uppercase">{formData.topCatches}</p></div>}
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      <div className="w-full max-w-7xl flex flex-col md:flex-row justify-center gap-4 mb-8 md:mb-12">
-        <button onClick={finalizeWithAI} disabled={loading || !records.length} className="flex-1 md:max-w-md bg-[#1581BF] text-white font-orbitron font-black py-4 rounded-2xl shadow-[0_0_30px_rgba(21,129,191,0.4)] transition-all tracking-[0.2em] uppercase text-xs md:text-sm">
-          {loading ? 'COMPILING AI REPORT...' : 'GENERATE AI SERIES BRIEFING'}
-        </button>
-        <button onClick={handleWhatsAppShare} className="flex-1 md:max-w-xs bg-green-600 text-white font-orbitron font-black py-4 rounded-2xl shadow-[0_0_30px_rgba(22,163,74,0.4)] transition-all tracking-[0.2em] uppercase text-xs md:text-sm flex items-center justify-center gap-2">
-           WHATSAPP SUMMARY
-        </button>
-      </div>
-
-      {summary && (
-        <div className="w-full max-w-5xl mb-24 animate-in fade-in slide-in-from-bottom-8 duration-500" ref={reportRef}>
-          <div className="bg-slate-900 border-2 md:border-4 border-[#1581BF] rounded-[30px] md:rounded-[45px] overflow-hidden shadow-2xl">
-            <div className="bg-[#1581BF] px-6 md:px-12 py-4 md:py-8 border-b-2 border-white/10 flex justify-between items-center">
-              <h3 className="font-orbitron text-white text-sm md:text-xl tracking-[0.3em] md:tracking-[0.6em] font-black uppercase">WICC SERIES BRIEFING</h3>
-              <div className="flex gap-4 md:gap-6">
-                 <button onClick={handleScreenshot} className="text-white hover:scale-125 transition-all">
-                   <svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                 </button>
-                 <button onClick={() => setSummary(null)} className="text-white/80 text-3xl md:text-5xl font-light">&times;</button>
-              </div>
-            </div>
-            <div className="p-6 md:p-14 font-mono text-xs md:text-base text-white font-bold whitespace-pre-wrap leading-relaxed md:leading-loose bg-black/60">
-              {summary}
-            </div>
-            <div className="p-4 md:p-8 bg-slate-950 flex flex-wrap justify-center gap-3 md:gap-6 border-t border-white/5">
-              <button onClick={() => { navigator.clipboard.writeText(summary); alert('COPIED'); }} className="flex-1 md:flex-none px-4 md:px-10 py-3 md:py-4 bg-white text-black font-orbitron font-black text-[10px] md:text-[12px] rounded-xl">CLIPBOARD</button>
-              <button onClick={handleWhatsAppShare} className="flex-1 md:flex-none px-4 md:px-10 py-3 md:py-4 bg-green-600 text-white font-orbitron font-black text-[10px] md:text-[12px] rounded-xl flex items-center justify-center gap-2">
-                WHATSAPP
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <footer className="mt-auto text-white/20 font-orbitron text-[8px] md:text-[10px] tracking-[0.5em] md:tracking-[1.5em] text-center w-full pb-8 md:pb-12 uppercase font-black">
-        WICC EST=2016 • PREMIER DIVISION DIGITAL SYSTEM
-      </footer>
-    </div>
-  );
-};
-
-export default App;
+              <button onClick={addRecord} className="w-full h-10 md:h-12 bg-white text-black font-black rounded-xl shadow-lg hover:scale-95 tr
