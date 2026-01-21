@@ -126,6 +126,9 @@ const App: React.FC = () => {
   
   // FIX: Added 'async' keyword and Supabase sync logic
   const addRecord = async () => {
+    const addRecord = async () => {
+    alert("Vibe Check: Button Clicked!"); // <-- ADD THIS LINE
+    // ... rest of the code
     // 1. Capture current data before reset
     const currentMatch = { ...formData };
 
