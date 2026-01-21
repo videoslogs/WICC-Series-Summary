@@ -139,9 +139,10 @@ const App: React.FC = () => {
   const archiveSeries = () => {
     if (!confirm('Archive and Reset current series?')) return;
     setRecords([]); setHistory([]);
+    setFormData(prev => ({ ...prev, mos: '', mvp: '', topWickets: '', topRuns: '', topCatches: '', matchNumber: '1' }));
   };
 
-  const finalizeAll = async () => {
+  const finalizeWithAI = async () => {
     if (!records.length) return;
     setLoading(true);
     const result = await generateSummary({
@@ -164,8 +165,8 @@ const App: React.FC = () => {
   };
 
   const handleWhatsAppShare = () => {
-    if (!summary) return;
-    const text = encodeURIComponent(`🏆 WICC SERIES BRIEFING 🏏\n\n${summary}\n\nWICC Match Summary Recorded Successfully ✨`);
+    const localSum = `🏆 WICC SERIES RECAP 🏏\nChampions: ${seriesStats.leader}\n\nElite Awards:\n- MOS: ${formData.mos}\n- MVP: ${formData.mvp}\n- Runs: ${formData.topRuns}\n- Wickets: ${formData.topWickets}\n- Catches: ${formData.topCatches}`;
+    const text = encodeURIComponent(summary || localSum);
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
@@ -436,11 +437,11 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Series End Awards Widget */}
-      <div className="w-full max-w-7xl bg-slate-900 border-2 border-orange-500/40 rounded-3xl md:rounded-[40px] p-4 md:p-8 mb-10">
+      {/* Series End Awards Hub */}
+      <div className="w-full max-w-7xl bg-slate-900 border-2 border-orange-500/40 rounded-3xl md:rounded-[40px] p-4 md:p-8 mb-6">
         <h3 className="font-orbitron text-orange-400 text-sm md:text-lg tracking-[0.2em] md:tracking-[0.4em] font-black mb-4 md:mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-1">
           <span>SERIES AWARDS HUB</span>
-          <span className="text-[8px] md:text-[11px] text-white/40 uppercase italic font-bold">FINALIZE ALL SELECTIONS</span>
+          <span className="text-[8px] md:text-[11px] text-white/40 uppercase italic font-bold">LIVE RECORDING MODE</span>
         </h3>
         
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-6">
@@ -467,9 +468,41 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <div className="w-full max-w-7xl flex justify-center mb-8 md:mb-12">
-        <button onClick={finalizeAll} disabled={loading || !records.length} className="w-full max-w-md bg-[#1581BF] text-white font-orbitron font-black py-4 md:py-5 rounded-2xl md:rounded-[25px] shadow-[0_0_30px_rgba(21,129,191,0.4)] transition-all tracking-[0.2em] md:tracking-[0.4em] uppercase text-sm md:text-lg">
-          {loading ? 'COMPILING...' : 'GENERATE SERIES SUMMARY'}
+      {/* Instant Recap Gadget (Local, no API) */}
+      {(formData.mos || formData.mvp || seriesStats.totalA > 0 || seriesStats.totalB > 0) && (
+        <div className="w-full max-w-7xl mb-8 animate-in slide-in-from-top-4 duration-300">
+           <div className="bg-slate-900 border-t-4 border-[#1581BF] rounded-2xl p-6 shadow-2xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
+                 <button onClick={archiveSeries} className="text-red-500 font-orbitron text-[10px] font-black border border-red-500 px-3 py-1 rounded-full">ARCHIVE SERIES</button>
+              </div>
+              <div className="flex flex-col md:flex-row gap-6 items-center">
+                 <div className="flex-1 text-center md:text-left">
+                    <h4 className="font-orbitron text-white text-xs tracking-widest uppercase mb-1 font-bold">🏆 SERIES RECAP</h4>
+                    <p className="text-[#57c1ff] font-black text-xl md:text-2xl uppercase">{seriesStats.leader}</p>
+                    <div className="flex gap-4 mt-2 justify-center md:justify-start font-mono text-xs">
+                       <span className="text-[#00e1ff]">{formData.teamOneName}: {seriesStats.totalA} Pts</span>
+                       <span className="text-white/20">|</span>
+                       <span className="text-[#ffaa00]">{formData.teamTwoName}: {seriesStats.totalB} Pts</span>
+                    </div>
+                 </div>
+                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-8 flex-[2] w-full border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-8">
+                    {formData.mos && <div className="text-center md:text-left"><p className="text-[8px] text-orange-400 uppercase font-black">MOS</p><p className="text-white font-bold text-sm truncate uppercase">{formData.mos}</p></div>}
+                    {formData.mvp && <div className="text-center md:text-left"><p className="text-[8px] text-[#00e1ff] uppercase font-black">MVP</p><p className="text-white font-bold text-sm truncate uppercase">{formData.mvp}</p></div>}
+                    {formData.topRuns && <div className="text-center md:text-left"><p className="text-[8px] text-green-400 uppercase font-black">RUNS</p><p className="text-white font-bold text-sm truncate uppercase">{formData.topRuns}</p></div>}
+                    {formData.topWickets && <div className="text-center md:text-left"><p className="text-[8px] text-red-400 uppercase font-black">WKTS</p><p className="text-white font-bold text-sm truncate uppercase">{formData.topWickets}</p></div>}
+                    {formData.topCatches && <div className="text-center md:text-left"><p className="text-[8px] text-yellow-400 uppercase font-black">CTHS</p><p className="text-white font-bold text-sm truncate uppercase">{formData.topCatches}</p></div>}
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      <div className="w-full max-w-7xl flex flex-col md:flex-row justify-center gap-4 mb-8 md:mb-12">
+        <button onClick={finalizeWithAI} disabled={loading || !records.length} className="flex-1 md:max-w-md bg-[#1581BF] text-white font-orbitron font-black py-4 rounded-2xl shadow-[0_0_30px_rgba(21,129,191,0.4)] transition-all tracking-[0.2em] uppercase text-xs md:text-sm">
+          {loading ? 'COMPILING AI REPORT...' : 'GENERATE AI SERIES BRIEFING'}
+        </button>
+        <button onClick={handleWhatsAppShare} className="flex-1 md:max-w-xs bg-green-600 text-white font-orbitron font-black py-4 rounded-2xl shadow-[0_0_30px_rgba(22,163,74,0.4)] transition-all tracking-[0.2em] uppercase text-xs md:text-sm flex items-center justify-center gap-2">
+           WHATSAPP SUMMARY
         </button>
       </div>
 
