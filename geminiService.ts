@@ -24,11 +24,12 @@ CLOSING LINE: "WICC Match Summary Recorded Successfully 🏏✨"
 `;
 
 export const generateSummary = async (data: any): Promise<string> => {
-  const apiKey = process.env.API_KEY;
+  // Matching the variable name from your Vercel screenshot
+  const apiKey = process.env.GEMINI_API_KEY;
   
   if (!apiKey) {
-    console.error("API_KEY is missing from environment variables.");
-    return "Error: API_KEY is not configured in Vercel. Please add it to Environment Variables.";
+    console.error("GEMINI_API_KEY is missing from environment variables.");
+    return "Error: GEMINI_API_KEY is not configured in Vercel. Please ensure the key name matches exactly.";
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -39,7 +40,7 @@ export const generateSummary = async (data: any): Promise<string> => {
   let winner = "SERIES IN PROGRESS";
   if (totalA >= 10) winner = data.teamOneName;
   else if (totalB >= 10) winner = data.teamTwoName;
-  else winner = totalA > totalB ? data.teamOneName : data.teamTwoName;
+  else winner = totalA > totalB ? data.teamOneName : totalB > totalA ? data.teamTwoName : "DRAW";
 
   const prompt = `
     SERIES DATA FOR REPORT:
