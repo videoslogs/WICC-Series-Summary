@@ -1,4 +1,4 @@
-
+import { supabase } from './supabaseClient'
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MatchData } from './types';
 import { generateSummary } from './geminiService';
