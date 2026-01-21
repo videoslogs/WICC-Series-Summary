@@ -125,10 +125,42 @@ const App: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setFormData(prev => ({ ...prev, [e.target.name]: e.target.value })); };
   
   const addRecord = () => {
+    // 1. Save to local state (keeping your current vibe)
     setHistory(prev => [...prev.slice(-9), [...records]]);
     if (editIndex !== null) {
-      const updated = [...records]; updated[editIndex] = formData; setRecords(updated); setEditIndex(null);
-    } else { setRecords([...records, formData]); }
+      const updated = [...records]; 
+      updated[editIndex] = formData; 
+      setRecords(updated); 
+      setEditIndex(null);
+    } else { 
+      setRecords([...records, formData]); 
+    }
+
+    // 2. SAVE TO SUPABASE (The new part)
+    try {
+      const { error } = await supabase
+        .from('wicc_matches')
+        .insert([
+          {
+            date: formData.date,
+            matchnumber: formData.matchNumber,
+            innings: formData.innings,
+            teamonename: formData.teamOneName,
+            teamtwoname: formData.teamTwoName,
+            // Add other columns here if you have them in Supabase, e.g.:
+            // teamonescore: formData.teamOneScore,
+            // teamtwoscore: formData.teamTwoScore
+          }
+        ]);
+
+      if (error) throw error;
+      console.log("Successfully synced with Supabase!");
+    } catch (err) {
+      console.error("Supabase Error:", err);
+      alert("Note: Match saved locally but failed to sync to Cloud database.");
+    }
+
+    // 3. Reset the form (existing logic)
     setFormData(prev => ({ 
       ...prev, teamOneScore: '', teamTwoScore: '', teamOneInn1: '', teamOneInn2: '',
       teamTwoInn1: '', teamTwoInn2: '', moi1: '', moi2: '', mom: '', overs: '', winMargin: '',
