@@ -1,7 +1,8 @@
-import { supabase } from './supabaseClient'
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MatchData } from './types';
 import { generateSummary } from './geminiService';
+import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
 
@@ -11,6 +12,23 @@ const WICC_MEMBERS = [
   "RAAM", "RUSHI", "SAMIR", "SHREE", "SHUBHA", "VIJAY", "VIVEK", "YASH", 
   "PRASATH", "DIL"
 ].sort();
+
+interface ArchivedSeries {
+  id: string;
+  created_at: string;
+  leader: string;
+  team_a: string;
+  team_b: string;
+  pts_a: number;
+  pts_b: number;
+  awards: {
+    mos: string;
+    mvp: string;
+    runs: string;
+    wickets: string;
+    catches: string;
+  };
+}
 
 const formatDateForDisplay = (dateStr: string) => {
   if (!dateStr) return '';
@@ -22,7 +40,9 @@ const formatDateForDisplay = (dateStr: string) => {
 
 const App: React.FC = () => {
   const [records, setRecords] = useState<MatchData[]>([]);
-  const [history, setHistory] = useState<MatchData[][]>([]);
+  const [archivedList, setArchivedList] = useState<ArchivedSeries[]>([]);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isCloudLoading, setIsCloudLoading] = useState(true);
   const reportRef = useRef<HTMLDivElement>(null);
   
   const [quickPlayerA, setQuickPlayerA] = useState('');
@@ -67,6 +87,47 @@ const App: React.FC = () => {
   const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
+
+  // Load from Supabase on mount
+  useEffect(() => {
+    const fetchCloudData = async () => {
+      setIsCloudLoading(true);
+      
+      // Fetch active matches
+      const { data: matches, error: mError } = await supabase
+        .from('wicc_matches')
+        .select('*')
+        .eq('is_archived', false)
+        .order('created_at', { ascending: true });
+      
+      if (matches) setRecords(matches);
+
+      // Fetch series history
+      const { data: history, error: hError } = await supabase
+        .from('wicc_series')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (history) {
+        // Map table columns to app interface if necessary
+        const mappedHistory = history.map((h: any) => ({
+            id: h.id,
+            created_at: h.created_at,
+            leader: h.leader,
+            team_a: h.team_a,
+            team_b: h.team_b,
+            pts_a: h.pts_a,
+            pts_b: h.pts_b,
+            awards: h.awards
+        }));
+        setArchivedList(mappedHistory);
+      }
+      
+      setIsCloudLoading(false);
+    };
+
+    fetchCloudData();
+  }, []);
 
   const seriesStats = useMemo(() => {
     const totalA = records.reduce((sum, r) => sum + parseFloat(r.teamOnePoints || '0'), 0);
@@ -121,79 +182,106 @@ const App: React.FC = () => {
     }));
   }, [formData.innings, formData.teamOneInn1, formData.teamOneInn2, formData.teamTwoInn1, formData.teamTwoInn2, formData.teamOneScore, formData.teamTwoScore, formData.teamOneName, formData.teamTwoName]);
 
-  const handleUndo = () => { if (history.length) { setRecords(history[history.length - 1]); setHistory(prev => prev.slice(0, -1)); } };
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setFormData(prev => ({ ...prev, [e.target.name]: e.target.value })); };
   
-  // FIX: Added 'async' keyword and Supabase sync logic
   const addRecord = async () => {
-    const addRecord = async () => {
-    alert("Vibe Check: Button Clicked!"); // <-- ADD THIS LINE
-    // ... rest of the code
-    // 1. Capture current data before reset
-    const currentMatch = { ...formData };
-
-    // 2. Save to local state for instant feedback
-    setHistory(prev => [...prev.slice(-9), [...records]]);
+    setLoading(true);
     if (editIndex !== null) {
-      const updated = [...records]; updated[editIndex] = currentMatch; setRecords(updated); setEditIndex(null);
-    } else { setRecords([...records, currentMatch]); }
-
-    // 3. CLOUD SYNC: Send to Supabase
-    try {
-      console.log("Vibe Check: Sending to Supabase...");
+      const target = records[editIndex];
       const { error } = await supabase
         .from('wicc_matches')
-        .insert([
-          {
-            date: currentMatch.date,
-            matchnumber: currentMatch.matchNumber,
-            innings: currentMatch.innings,
-            teamonename: currentMatch.teamOneName,
-            teamtwoname: currentMatch.teamTwoName
-          }
-        ]);
+        .update({ ...formData })
+        .eq('id', (target as any).id);
+      
+      if (!error) {
+        const updated = [...records];
+        updated[editIndex] = formData;
+        setRecords(updated);
+        setEditIndex(null);
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('wicc_matches')
+        .insert([{ ...formData, is_archived: false }])
+        .select();
 
-      if (error) throw error;
-      console.log("Vibe Check: Supabase Sync Success!");
-      alert("Match recorded and synced to Cloud!");
-    } catch (err: any) {
-      console.error("Cloud Sync Error:", err);
-      alert("Local save success, but Cloud sync failed: " + (err.message || "Network Error"));
+      if (data) setRecords([...records, data[0]]);
+      if (error) alert("Sync Error: " + error.message);
     }
 
-    // 4. Reset the form
     setFormData(prev => ({ 
       ...prev, teamOneScore: '', teamTwoScore: '', teamOneInn1: '', teamOneInn2: '',
       teamTwoInn1: '', teamTwoInn2: '', moi1: '', moi2: '', mom: '', overs: '', winMargin: '',
       matchNumber: (parseInt(prev.matchNumber) + 1 || records.length + 2).toString()
     }));
+    setLoading(false);
   };
 
-  // FIX: Added Supabase sync for the series table when archiving
-  const archiveSeries = async () => {
-    if (!confirm('Archive and Reset current series? This will also sync awards to the Cloud.')) return;
+  const deleteRecord = async (idx: number) => {
+    const target = records[idx];
+    const { error } = await supabase
+      .from('wicc_matches')
+      .delete()
+      .eq('id', (target as any).id);
     
-    try {
-      const { error } = await supabase
-        .from('wicc_series')
-        .insert([{
-          mos: formData.mos,
-          mvp: formData.mvp,
-          topwickets: formData.topWickets,
-          topruns: formData.topRuns,
-          topcatches: formData.topCatches,
-          winner: seriesStats.leader
-        }]);
-      
-      if (error) throw error;
-      alert("Series awards archived to Cloud!");
-    } catch (err: any) {
-      console.error("Archive Error:", err);
-      alert("Could not sync series awards to Cloud, but resetting local screen now.");
+    if (!error) setRecords(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const archiveSeries = async () => {
+    if (!confirm('Cloud Archive current series and reset matches?')) return;
+    setLoading(true);
+
+    const awards = {
+      mos: formData.mos,
+      mvp: formData.mvp,
+      runs: formData.topRuns,
+      wickets: formData.topWickets,
+      catches: formData.topCatches
+    };
+
+    // 1. Create Series Entry
+    const { data: newSeries, error: sError } = await supabase
+      .from('wicc_series')
+      .insert([{
+        leader: seriesStats.leader,
+        team_a: formData.teamOneName,
+        team_b: formData.teamTwoName,
+        pts_a: seriesStats.totalA,
+        pts_b: seriesStats.totalB,
+        awards: awards
+      }])
+      .select();
+
+    if (sError) {
+      alert("Archive Failed: " + sError.message);
+      setLoading(false);
+      return;
     }
 
-    setRecords([]); setHistory([]);
+    // 2. Clear matches from active view
+    await supabase
+      .from('wicc_matches')
+      .update({ is_archived: true })
+      .eq('is_archived', false);
+
+    if (newSeries) {
+        const mapped = {
+            id: newSeries[0].id,
+            created_at: newSeries[0].created_at,
+            leader: newSeries[0].leader,
+            team_a: newSeries[0].team_a,
+            team_b: newSeries[0].team_b,
+            pts_a: newSeries[0].pts_a,
+            pts_b: newSeries[0].pts_b,
+            awards: newSeries[0].awards
+        } as ArchivedSeries;
+        setArchivedList([mapped, ...archivedList]);
+    }
+
+    setRecords([]);
     setFormData(prev => ({ ...prev, mos: '', mvp: '', topWickets: '', topRuns: '', topCatches: '', matchNumber: '1' }));
+    setLoading(false);
+    alert("Series Successfully Archived to WICC Cloud!");
   };
 
   const finalizeWithAI = async () => {
@@ -224,6 +312,13 @@ const App: React.FC = () => {
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
+  if (isCloudLoading) return (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4">
+      <div className="w-12 h-12 border-4 border-[#1581BF] border-t-orange-500 rounded-full animate-spin"></div>
+      <p className="font-orbitron text-xs text-[#57c1ff] tracking-[0.3em] uppercase animate-pulse">Establishing Cloud Sync...</p>
+    </div>
+  );
+
   return (
     <div className="min-h-screen p-4 md:p-8 flex flex-col items-center bg-slate-950">
       <datalist id="members-all">
@@ -231,7 +326,13 @@ const App: React.FC = () => {
       </datalist>
 
       {/* Header */}
-      <div className="w-full max-w-7xl flex flex-col items-center logo-glow mb-6 md:mb-10">
+      <div className="w-full max-w-7xl flex flex-col items-center logo-glow mb-6 md:mb-10 relative">
+        <button 
+          onClick={() => setShowHistoryModal(true)}
+          className="absolute right-0 top-0 bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg text-[9px] font-orbitron font-bold tracking-widest text-white/50 hover:text-white hover:bg-white/10 transition-all uppercase"
+        >
+          View History
+        </button>
         <h1 className="font-orbitron text-5xl md:text-8xl font-bold tracking-tighter text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">WICC</h1>
         <div className="flex items-center gap-2 mt-2">
           <span className="h-1.5 w-6 md:w-10 bg-[#1581BF] rounded-full shadow-[0_0_10px_#1581BF]"></span>
@@ -266,7 +367,6 @@ const App: React.FC = () => {
       <div className="w-full max-w-7xl spreadsheet-container rounded-2xl md:rounded-3xl overflow-hidden mb-6 md:mb-8">
         <div className="flex flex-col md:flex-row justify-between items-center p-3 md:p-5 bg-slate-900/98 border-b-2 border-[#1581BF]/50 gap-3 md:gap-4">
           <div className="flex gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
-            <button onClick={handleUndo} className="flex-1 md:flex-none px-3 md:px-5 py-2 bg-slate-800 text-[10px] font-black rounded-lg border border-[#1581BF]/30 text-white whitespace-nowrap">UNDO</button>
             <button onClick={() => { 
                 const ws = XLSX.utils.json_to_sheet(records);
                 const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "WICC");
@@ -321,7 +421,7 @@ const App: React.FC = () => {
                         </div>
                         <div className="absolute inset-0 bg-slate-900 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200">
                         <button onClick={() => { setFormData(records[idx] as any); setEditIndex(idx); }} className="bg-[#1581BF] px-2 md:px-3 py-1 rounded text-[9px] font-black text-white">EDIT</button>
-                        <button onClick={() => setRecords(prev => prev.filter((_, i) => i !== idx))} className="bg-red-600 px-2 md:px-3 py-1 rounded text-[9px] font-black text-white">DEL</button>
+                        <button onClick={() => deleteRecord(idx)} className="bg-red-600 px-2 md:px-3 py-1 rounded text-[9px] font-black text-white">DEL</button>
                         </div>
                     </div>
                     </div>
@@ -384,8 +484,8 @@ const App: React.FC = () => {
               <input name="winMargin" value={formData.winMargin} onChange={handleInputChange} className="w-full h-10 md:h-12 text-center text-[9px] md:text-[10px] font-black bg-black/80 border-2 border-yellow-500/30 rounded-xl text-yellow-300" />
             </div>
             <div className="col-span-2 md:col-span-2">
-              <button onClick={addRecord} className="w-full h-10 md:h-12 bg-white text-black font-black rounded-xl shadow-lg hover:scale-95 transition-all uppercase text-[10px] md:text-[12px] tracking-wider">
-                {editIndex !== null ? 'UPDATE' : 'COMMIT'}
+              <button onClick={addRecord} disabled={loading} className="w-full h-10 md:h-12 bg-white text-black font-black rounded-xl shadow-lg hover:scale-95 transition-all uppercase text-[10px] md:text-[12px] tracking-wider disabled:opacity-50">
+                {loading ? 'SYNCING...' : (editIndex !== null ? 'UPDATE' : 'COMMIT')}
               </button>
             </div>
           </div>
@@ -495,7 +595,7 @@ const App: React.FC = () => {
       <div className="w-full max-w-7xl bg-slate-900 border-2 border-orange-500/40 rounded-3xl md:rounded-[40px] p-4 md:p-8 mb-6">
         <h3 className="font-orbitron text-orange-400 text-sm md:text-lg tracking-[0.2em] md:tracking-[0.4em] font-black mb-4 md:mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-1">
           <span>SERIES AWARDS HUB</span>
-          <span className="text-[8px] md:text-[11px] text-white/40 uppercase italic font-bold">LIVE RECORDING MODE</span>
+          <span className="text-[8px] md:text-[11px] text-[#1581BF] uppercase italic font-bold tracking-widest animate-pulse">SUPABASE CLOUD LIVE</span>
         </h3>
         
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-6">
@@ -527,7 +627,7 @@ const App: React.FC = () => {
         <div className="w-full max-w-7xl mb-8 animate-in slide-in-from-top-4 duration-300">
            <div className="bg-slate-900 border-t-4 border-[#1581BF] rounded-2xl p-6 shadow-2xl relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
-                 <button onClick={archiveSeries} className="text-red-500 font-orbitron text-[10px] font-black border border-red-500 px-3 py-1 rounded-full">ARCHIVE SERIES</button>
+                 <button onClick={archiveSeries} disabled={loading} className="text-red-500 font-orbitron text-[10px] font-black border border-red-500 px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-all">ARCHIVE SERIES</button>
               </div>
               <div className="flex flex-col md:flex-row gap-6 items-center">
                  <div className="flex-1 text-center md:text-left">
@@ -548,6 +648,64 @@ const App: React.FC = () => {
                  </div>
               </div>
            </div>
+        </div>
+      )}
+
+      {/* History Modal / Viewer */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4 backdrop-blur-md">
+          <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl border-2 border-white/10 overflow-hidden flex flex-col shadow-2xl">
+            <div className="p-6 bg-[#1581BF] flex justify-between items-center">
+              <h2 className="font-orbitron text-white font-black text-lg tracking-[0.3em] uppercase">WICC CLOUD REPOSITORY</h2>
+              <button onClick={() => setShowHistoryModal(false)} className="text-white text-3xl font-light hover:rotate-90 transition-transform">&times;</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar bg-black/20">
+              {archivedList.length === 0 ? (
+                <div className="flex flex-col items-center py-20">
+                  <p className="text-white/20 font-orbitron uppercase tracking-[0.5em] text-center">Cloud Database Empty</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {archivedList.map((entry) => (
+                    <div key={entry.id} className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 hover:border-[#1581BF]/50 transition-all group">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <p className="text-[#57c1ff] font-black text-lg uppercase leading-tight">{entry.leader}</p>
+                          <p className="text-[9px] text-white/40 font-mono mt-1">ID: {entry.id} | CREATED: {new Date(entry.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex gap-4 font-black text-xs">
+                          <span className="text-[#00e1ff]">{entry.pts_a}</span>
+                          <span className="text-[#ffaa00]">{entry.pts_b}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 md:grid-cols-5 gap-3 pt-3 border-t border-white/5">
+                        <div className="text-[8px] font-bold">
+                          <span className="text-orange-500 uppercase block text-[6px] mb-1">MOS</span>
+                          <span className="text-white uppercase truncate block">{entry.awards.mos || '-'}</span>
+                        </div>
+                        <div className="text-[8px] font-bold">
+                          <span className="text-[#00e1ff] uppercase block text-[6px] mb-1">MVP</span>
+                          <span className="text-white uppercase truncate block">{entry.awards.mvp || '-'}</span>
+                        </div>
+                        <div className="text-[8px] font-bold">
+                          <span className="text-green-500 uppercase block text-[6px] mb-1">RUNS</span>
+                          <span className="text-white uppercase truncate block">{entry.awards.runs || '-'}</span>
+                        </div>
+                        <div className="text-[8px] font-bold">
+                          <span className="text-red-500 uppercase block text-[6px] mb-1">WKTS</span>
+                          <span className="text-white uppercase truncate block">{entry.awards.wickets || '-'}</span>
+                        </div>
+                        <div className="text-[8px] font-bold">
+                          <span className="text-yellow-400 uppercase block text-[6px] mb-1">CTHS</span>
+                          <span className="text-white uppercase truncate block">{entry.awards.catches || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -577,7 +735,7 @@ const App: React.FC = () => {
             </div>
             <div className="p-4 md:p-8 bg-slate-950 flex flex-wrap justify-center gap-3 md:gap-6 border-t border-white/5">
               <button onClick={() => { navigator.clipboard.writeText(summary); alert('COPIED'); }} className="flex-1 md:flex-none px-4 md:px-10 py-3 md:py-4 bg-white text-black font-orbitron font-black text-[10px] md:text-[12px] rounded-xl">CLIPBOARD</button>
-              <button onClick={handleWhatsAppShare} className="flex-1 md:flex-none px-4 md:px-10 py-3 md:py-4 bg-green-600 text-white font-orbitron font-black text-[10px] md:text-[12px] rounded-xl flex items-center justify-center gap-2">
+              <button onClick={handleWhatsAppShare} className="flex-1 md:max-w-xs px-4 md:px-10 py-3 md:py-4 bg-green-600 text-white font-orbitron font-black text-[10px] md:text-[12px] rounded-xl flex items-center justify-center gap-2">
                 WHATSAPP
               </button>
             </div>
@@ -586,7 +744,7 @@ const App: React.FC = () => {
       )}
 
       <footer className="mt-auto text-white/20 font-orbitron text-[8px] md:text-[10px] tracking-[0.5em] md:tracking-[1.5em] text-center w-full pb-8 md:pb-12 uppercase font-black">
-        WICC EST=2016 • PREMIER DIVISION DIGITAL SYSTEM
+        WICC EST=2016 • CLOUD DIVISION DIGITAL SYSTEM
       </footer>
     </div>
   );
