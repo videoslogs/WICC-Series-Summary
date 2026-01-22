@@ -19,8 +19,6 @@ export interface MatchData {
   moi2: string;
   mom: string;
   mos: string;
-  seriesScore?: string;
-  leadingTeam?: string;
   winMargin?: string;
 }
 
