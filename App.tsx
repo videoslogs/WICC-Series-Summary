@@ -181,20 +181,36 @@ const App: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setFormData(prev => ({ ...prev, [e.target.name]: e.target.value })); };
   
+  // STRICT PAYLOAD MAPPING: This ensures NO invalid columns are sent to Supabase
+  const getCleanDBPayload = (data: any) => {
+    return {
+      date: data.date,
+      matchNumber: data.matchNumber,
+      innings: data.innings,
+      teamOneName: data.teamOneName,
+      teamTwoName: data.teamTwoName,
+      teamOneScore: data.teamOneScore,
+      teamTwoScore: data.teamTwoScore,
+      teamOneInn1: data.teamOneInn1,
+      teamOneInn2: data.teamOneInn2,
+      teamTwoInn1: data.teamTwoInn1,
+      teamTwoInn2: data.teamTwoInn2,
+      overs: data.overs,
+      resultType: data.resultType,
+      teamOnePoints: data.teamOnePoints,
+      teamTwoPoints: data.teamTwoPoints,
+      moi1: data.moi1,
+      moi2: data.moi2,
+      mom: data.mom,
+      mos: data.mos,
+      winMargin: data.winMargin
+    };
+  };
+
   const addRecord = async () => {
     setLoading(true);
 
-    // Filter out fields that do not exist in the Supabase 'wicc_matches' table
-    // UI-only helper fields (leadingTeam, seriesScore) and Series Awards (mvp, topWickets, etc)
-    const { 
-      leadingTeam, 
-      seriesScore, 
-      mvp, 
-      topWickets, 
-      topRuns, 
-      topCatches, 
-      ...dbPayload 
-    } = formData;
+    const dbPayload = getCleanDBPayload(formData);
 
     if (editIndex !== null) {
       const target = records[editIndex];
