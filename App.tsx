@@ -93,8 +93,7 @@ const App: React.FC = () => {
     const fetchCloudData = async () => {
       setIsCloudLoading(true);
       
-      // Fetch active matches
-      const { data: matches, error: mError } = await supabase
+      const { data: matches } = await supabase
         .from('wicc_matches')
         .select('*')
         .eq('is_archived', false)
@@ -102,14 +101,12 @@ const App: React.FC = () => {
       
       if (matches) setRecords(matches);
 
-      // Fetch series history
-      const { data: history, error: hError } = await supabase
+      const { data: history } = await supabase
         .from('wicc_series')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (history) {
-        // Map table columns to app interface if necessary
         const mappedHistory = history.map((h: any) => ({
             id: h.id,
             created_at: h.created_at,
@@ -186,11 +183,24 @@ const App: React.FC = () => {
   
   const addRecord = async () => {
     setLoading(true);
+
+    // Filter out fields that do not exist in the Supabase 'wicc_matches' table
+    // UI-only helper fields (leadingTeam, seriesScore) and Series Awards (mvp, topWickets, etc)
+    const { 
+      leadingTeam, 
+      seriesScore, 
+      mvp, 
+      topWickets, 
+      topRuns, 
+      topCatches, 
+      ...dbPayload 
+    } = formData;
+
     if (editIndex !== null) {
       const target = records[editIndex];
       const { error } = await supabase
         .from('wicc_matches')
-        .update({ ...formData })
+        .update(dbPayload)
         .eq('id', (target as any).id);
       
       if (!error) {
@@ -198,11 +208,13 @@ const App: React.FC = () => {
         updated[editIndex] = formData;
         setRecords(updated);
         setEditIndex(null);
+      } else {
+        alert("Sync Error: " + error.message);
       }
     } else {
       const { data, error } = await supabase
         .from('wicc_matches')
-        .insert([{ ...formData, is_archived: false }])
+        .insert([{ ...dbPayload, is_archived: false }])
         .select();
 
       if (data) setRecords([...records, data[0]]);
@@ -239,7 +251,6 @@ const App: React.FC = () => {
       catches: formData.topCatches
     };
 
-    // 1. Create Series Entry
     const { data: newSeries, error: sError } = await supabase
       .from('wicc_series')
       .insert([{
@@ -258,7 +269,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // 2. Clear matches from active view
     await supabase
       .from('wicc_matches')
       .update({ is_archived: true })
